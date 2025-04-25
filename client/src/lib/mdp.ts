@@ -90,6 +90,15 @@ export function runMDP(
   // Initialize value function with zeros
   let values: number[][] = Array(rows).fill(0).map(() => Array(cols).fill(0));
   
+  // Set obstacle values to a large negative value to ensure they are avoided
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      if (grid[row][col] === CellType.OBSTACLE) {
+        values[row][col] = -100; // Very negative value for obstacles
+      }
+    }
+  }
+  
   // Set an upper bound on iterations to prevent infinite loops
   const maxIterations = 1000;
   let iterations = 0;
@@ -100,12 +109,20 @@ export function runMDP(
     delta = 0;
     const newValues = Array(rows).fill(0).map(() => Array(cols).fill(0));
     
+    // Copy obstacle values to new values array (keep obstacles negative)
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        if (grid[row][col] === CellType.OBSTACLE) {
+          newValues[row][col] = -100;
+        }
+      }
+    }
+    
     // Update each state
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
-        // Skip obstacle cells
+        // Skip obstacle cells - preserve their negative values
         if (grid[row][col] === CellType.OBSTACLE) {
-          newValues[row][col] = 0;
           continue;
         }
         
@@ -121,6 +138,12 @@ export function runMDP(
         for (const action of ACTIONS) {
           try {
             const nextState = getNextState(grid, row, col, action);
+            
+            // Explicitly skip actions that lead to obstacles
+            if (grid[nextState.row][nextState.col] === CellType.OBSTACLE) {
+              continue;
+            }
+            
             const reward = getReward(grid, row, col);
             const nextValue = values[nextState.row][nextState.col];
             
@@ -195,6 +218,11 @@ export function extractPolicy(
           
           const nextState = getNextState(grid, row, col, action);
           
+          // Skip if next state is an obstacle
+          if (grid[nextState.row][nextState.col] === CellType.OBSTACLE) {
+            continue;
+          }
+          
           // Skip if next state is the same as current state (meaning it was invalid)
           if (nextState.row === row && nextState.col === col && action !== 'none') {
             continue;
@@ -208,6 +236,12 @@ export function extractPolicy(
           }
           
           const nextValue = values[nextState.row][nextState.col];
+          
+          // Skip if next state has a very negative value (likely an obstacle)
+          if (nextValue < -50) {
+            continue;
+          }
+          
           const actionValue = reward + (discountFactor * nextValue);
           
           if (actionValue > maxActionValue) {
@@ -232,7 +266,8 @@ export function extractPolicy(
 export function getOptimalPath(
   policy: string[][], 
   start: Cell, 
-  goal: Cell
+  goal: Cell,
+  grid?: Grid // Optional grid for obstacle checking
 ): Cell[] {
   // Validate inputs
   if (!policy || policy.length === 0 || !policy[0] || policy[0].length === 0) {
@@ -289,6 +324,12 @@ export function getOptimalPath(
       if (nextPos.row < 0 || nextPos.row >= rows || 
           nextPos.col < 0 || nextPos.col >= cols) {
         console.warn(`Next position [${nextPos.row},${nextPos.col}] is outside grid boundaries`);
+        break;
+      }
+      
+      // Check if next position is an obstacle (if grid is provided)
+      if (grid && grid[nextPos.row][nextPos.col] === CellType.OBSTACLE) {
+        console.warn(`Next position [${nextPos.row},${nextPos.col}] is an obstacle, stopping path`);
         break;
       }
       

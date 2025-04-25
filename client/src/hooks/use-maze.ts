@@ -186,8 +186,15 @@ export function useMaze(): MazeState {
       // Extract policy from value function
       const policyMap = extractPolicy(values, grid, discountFactor);
       
-      // Get optimal path
-      const path = getOptimalPath(policyMap, startPosition, goalPosition);
+      // Get optimal path, passing the grid for obstacle checking
+      const path = getOptimalPath(policyMap, startPosition, goalPosition, grid);
+      
+      // Check if we have a valid path to the goal
+      if (path.length === 0 || (path.length > 0 && 
+          (path[path.length-1].row !== goalPosition.row || 
+           path[path.length-1].col !== goalPosition.col))) {
+        throw new Error("Could not find a valid path to the goal");
+      }
       
       // Update state
       setStateValues(values);
@@ -198,6 +205,10 @@ export function useMaze(): MazeState {
     } catch (error) {
       setStatusMessage("Error: Could not find solution. Try reducing obstacles.");
       console.error("Error solving maze:", error);
+      // Reset solution data on error
+      setStateValues(null);
+      setPolicy(null);
+      setOptimalPath(null);
     } finally {
       setIsSolving(false);
     }

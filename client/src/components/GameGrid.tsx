@@ -47,8 +47,13 @@ const GameGrid: React.FC<GameGridProps> = ({ maze }) => {
       'none': '•'
     };
     
+    // Adjust text size based on grid size
+    const textSize = maze.size <= 8 ? 'text-lg' : 
+                    maze.size <= 12 ? 'text-md' : 
+                    maze.size <= 15 ? 'text-sm' : 'text-xs';
+    
     return (
-      <div className="absolute inset-0 flex items-center justify-center text-magic font-bold text-lg z-20">
+      <div className={`absolute inset-0 flex items-center justify-center text-magic font-bold ${textSize} z-20`}>
         {arrows[policy]}
       </div>
     );
@@ -61,12 +66,18 @@ const GameGrid: React.FC<GameGridProps> = ({ maze }) => {
     const value = maze.stateValues[row]?.[col];
     if (value === undefined) return null;
     
+    // Adjust font size based on grid size
+    const fontSize = maze.size <= 10 ? 'text-xs' : 'text-[0.6rem]';
+    
     return (
-      <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold z-10 text-forest">
+      <div className={`absolute inset-0 flex items-center justify-center ${fontSize} font-semibold z-10 text-forest`}>
         {value.toFixed(2)}
       </div>
     );
   };
+
+  // Calculate grid container size to maintain square aspect ratio
+  const gridSize = "min(500px, 70vh)";
 
   return (
     <section className="parchment rounded-2xl p-6 lg:col-span-8 relative overflow-hidden">
@@ -76,12 +87,13 @@ const GameGrid: React.FC<GameGridProps> = ({ maze }) => {
       </h2>
       
       {/* Game Grid Container */}
-      <div className="relative h-[500px] w-full flex items-center justify-center">
+      <div className="relative flex items-center justify-center mx-auto" style={{ width: gridSize, height: gridSize }}>
         {/* SVG Overlay for paths and animations */}
         <svg 
           ref={svgRef}
           className="absolute inset-0 w-full h-full z-10" 
           preserveAspectRatio="xMidYMid meet"
+          viewBox={`0 0 ${500} ${500}`}
         >
           <path 
             id="optimal-path" 
@@ -97,7 +109,7 @@ const GameGrid: React.FC<GameGridProps> = ({ maze }) => {
         
         {/* Maze Grid */}
         <div 
-          className={`grid gap-1 w-full h-full border-4 border-wooden rounded-lg overflow-hidden`}
+          className={`grid gap-1 w-full h-full border-4 border-wooden rounded-lg overflow-hidden aspect-square`}
           style={{ 
             gridTemplateColumns: `repeat(${maze.size}, 1fr)`,
             gridTemplateRows: `repeat(${maze.size}, 1fr)`
@@ -123,21 +135,27 @@ const GameGrid: React.FC<GameGridProps> = ({ maze }) => {
                   onClick={() => maze.toggleCell(rowIndex, colIndex)}
                 >
                   {cell === CellType.OBSTACLE && (
-                    <svg className="w-full h-full opacity-70" viewBox="0 0 24 24">
+                    <svg className="w-2/3 h-2/3 mx-auto opacity-70" viewBox="0 0 24 24">
                       <path fill="currentColor" d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M16,13V11H13V8H11V11H8V13H11V16H13V13H16Z" />
                     </svg>
                   )}
                   
                   {isAgentPos && (
-                    <div className="agent w-10 h-10 flex items-center justify-center z-30">
-                      <svg className="w-full h-full" viewBox="0 0 24 24">
+                    <div className="agent absolute inset-0 flex items-center justify-center z-30">
+                      <svg 
+                        className={`${maze.size <= 10 ? 'w-3/4 h-3/4' : 'w-2/3 h-2/3'}`} 
+                        viewBox="0 0 24 24"
+                      >
                         <path fill="hsl(var(--magic))" d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M15,11V13H17V15H15V17H13V15H11V17H9V15H7V13H9V11H7V9H9V7H11V9H13V7H15V9H17V11H15Z" />
                       </svg>
                     </div>
                   )}
                   
                   {cell === CellType.GOAL && (
-                    <svg className="w-3/4 h-3/4" viewBox="0 0 24 24">
+                    <svg 
+                      className={`${maze.size <= 10 ? 'w-3/4 h-3/4' : 'w-2/3 h-2/3'}`} 
+                      viewBox="0 0 24 24"
+                    >
                       <path fill="currentColor" d="M5,4H19A3,3 0 0,1 22,7V13H20V7A1,1 0 0,0 19,6H5A1,1 0 0,0 4,7V19A1,1 0 0,0 5,20H9V22H5A3,3 0 0,1 2,19V7A3,3 0 0,1 5,4M18,14H20V17H23V19H20V22H18V19H15V17H18V14M9,11H13.5A1.5,1.5 0 0,1 15,12.5A1.5,1.5 0 0,1 13.5,14H11V16H9V11M11,12V13H13.5A0.5,0.5 0 0,0 14,12.5A0.5,0.5 0 0,0 13.5,12H11Z" />
                     </svg>
                   )}

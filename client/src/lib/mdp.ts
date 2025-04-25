@@ -15,6 +15,19 @@ const DELTAS: Record<Action, [number, number]> = {
 
 // Get next state given current state and action
 function getNextState(grid: Grid, row: number, col: number, action: Action): Cell {
+  // Validate inputs
+  if (!grid || grid.length === 0 || !grid[0]) {
+    console.error("Invalid grid in getNextState");
+    return { row, col };
+  }
+  
+  // Check if current position is valid
+  if (row < 0 || row >= grid.length || col < 0 || col >= grid[0].length) {
+    console.error(`Invalid current position [${row},${col}] in getNextState`);
+    return { row: 0, col: 0 };
+  }
+  
+  // Get movement deltas
   const [dr, dc] = DELTAS[action];
   const newRow = row + dr;
   const newCol = col + dc;
@@ -34,9 +47,27 @@ function getNextState(grid: Grid, row: number, col: number, action: Action): Cel
 
 // Get reward for being in a state
 function getReward(grid: Grid, row: number, col: number): number {
+  // Validate inputs
+  if (!grid || grid.length === 0 || !grid[0]) {
+    console.error("Invalid grid in getReward");
+    return -0.01;
+  }
+  
+  // Check if position is valid
+  if (row < 0 || row >= grid.length || col < 0 || col >= grid[0].length) {
+    console.error(`Invalid position [${row},${col}] in getReward`);
+    return -0.01;
+  }
+  
   if (grid[row][col] === CellType.GOAL) {
     return 1; // Goal state has positive reward
   }
+  
+  // Larger penalty for obstacle cells
+  if (grid[row][col] === CellType.OBSTACLE) {
+    return -0.5;
+  }
+  
   return -0.01; // Small negative reward for each step to encourage shortest path
 }
 
@@ -136,12 +167,13 @@ export function extractPolicy(
 ): string[][] {
   const rows = grid.length;
   const cols = grid[0].length;
-  const policy: string[][] = Array(rows).fill('none').map(() => Array(cols).fill('none'));
+  const policy: string[][] = Array(rows).fill(0).map(() => Array(cols).fill('none'));
   
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       // Skip obstacles
       if (grid[row][col] === CellType.OBSTACLE) {
+        policy[row][col] = 'none';
         continue;
       }
       
@@ -154,10 +186,20 @@ export function extractPolicy(
       // Find action with maximum expected value
       let maxActionValue = -Infinity;
       let bestAction = 'none';
+      let hasValidAction = false;
       
       for (const action of ACTIONS) {
         try {
+          // Make sure we're not considering "none" when finding best direction
+          if (action === 'none' && hasValidAction) continue;
+          
           const nextState = getNextState(grid, row, col, action);
+          
+          // Skip if next state is the same as current state (meaning it was invalid)
+          if (nextState.row === row && nextState.col === col && action !== 'none') {
+            continue;
+          }
+          
           const reward = getReward(grid, row, col);
           
           // Ensure the next state value exists
@@ -171,6 +213,7 @@ export function extractPolicy(
           if (actionValue > maxActionValue) {
             maxActionValue = actionValue;
             bestAction = action;
+            hasValidAction = true;
           }
         } catch (error) {
           console.warn(`Error calculating policy for [${row},${col}], action ${action}:`, error);

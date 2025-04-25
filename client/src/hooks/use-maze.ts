@@ -209,7 +209,7 @@ export function useMaze(): MazeState {
     setPolicy(null);
     setOptimalPath(null);
     setIterations(0);
-    setAgentPosition(startPosition);
+    setAgentPosition(startPosition ? { ...startPosition } : { row: 0, col: 0 });
     setStatusMessage("Solution reset. Generate a new maze or solve again.");
   }, [startPosition]);
   
@@ -218,22 +218,36 @@ export function useMaze(): MazeState {
     if (!optimalPath || optimalPath.length === 0 || isAnimating) return;
     
     setIsAnimating(true);
-    setAgentPosition(startPosition);
+    
+    // Make sure we have a valid start position
+    const validStart = startPosition ? { ...startPosition } : { row: 0, col: 0 };
+    setAgentPosition(validStart);
+    
+    // Small delay before starting animation
+    await new Promise(resolve => setTimeout(resolve, 100));
     
     // Calculate delay based on animation speed (range: 800ms to 100ms)
     const delay = 900 - (animationSpeed * 160);
     
-    // Animate through each step in the path
-    for (let i = 0; i < optimalPath.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, delay));
-      setAgentPosition(optimalPath[i]);
+    try {
+      // Animate through each step in the path
+      for (let i = 0; i < optimalPath.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        if (optimalPath[i]) {
+          setAgentPosition(optimalPath[i]);
+          // Update status message
+          setStatusMessage(`Step ${i + 1} of ${optimalPath.length}`);
+        }
+      }
       
-      // Update status message
-      setStatusMessage(`Step ${i + 1} of ${optimalPath.length}`);
+      setStatusMessage(`Reached goal in ${optimalPath.length} steps!`);
+    } catch (error) {
+      console.error("Error animating agent:", error);
+      setStatusMessage("Animation encountered an error");
+    } finally {
+      setIsAnimating(false);
     }
-    
-    setIsAnimating(false);
-    setStatusMessage(`Reached goal in ${optimalPath.length} steps!`);
   }, [optimalPath, animationSpeed, isAnimating, startPosition]);
   
   return {

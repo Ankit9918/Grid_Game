@@ -51,6 +51,11 @@ export function runMDP(
   const rows = grid.length;
   const cols = grid[0].length;
   
+  // Check if goal is accessible
+  if (grid[goal.row][goal.col] !== CellType.GOAL) {
+    throw new Error("Goal position is not marked as a goal in the grid");
+  }
+  
   // Initialize value function with zeros
   let values: number[][] = Array(rows).fill(0).map(() => Array(cols).fill(0));
   
@@ -83,13 +88,23 @@ export function runMDP(
         let maxActionValue = -Infinity;
         
         for (const action of ACTIONS) {
-          const nextState = getNextState(grid, row, col, action);
-          const reward = getReward(grid, row, col);
-          const nextValue = values[nextState.row][nextState.col];
-          
-          // Calculate value using Bellman equation
-          const actionValue = reward + (discountFactor * nextValue);
-          maxActionValue = Math.max(maxActionValue, actionValue);
+          try {
+            const nextState = getNextState(grid, row, col, action);
+            const reward = getReward(grid, row, col);
+            const nextValue = values[nextState.row][nextState.col];
+            
+            // Calculate value using Bellman equation
+            const actionValue = reward + (discountFactor * nextValue);
+            maxActionValue = Math.max(maxActionValue, actionValue);
+          } catch (error) {
+            console.warn(`Error calculating action value for [${row},${col}], action ${action}:`, error);
+            continue;
+          }
+        }
+        
+        // Handle case where no valid actions were found
+        if (maxActionValue === -Infinity) {
+          maxActionValue = -1; // Assign a default negative value
         }
         
         // Update the value
@@ -103,6 +118,11 @@ export function runMDP(
     // Update values for next iteration
     values = newValues;
     iterations++;
+  }
+  
+  // Check if solution was found (value iteration converged)
+  if (iterations >= maxIterations && delta > convergenceThreshold) {
+    throw new Error("Value iteration did not converge, maze may not be solvable");
   }
   
   return { values, iterations };
@@ -136,15 +156,25 @@ export function extractPolicy(
       let bestAction = 'none';
       
       for (const action of ACTIONS) {
-        const nextState = getNextState(grid, row, col, action);
-        const reward = getReward(grid, row, col);
-        const nextValue = values[nextState.row][nextState.col];
-        
-        const actionValue = reward + (discountFactor * nextValue);
-        
-        if (actionValue > maxActionValue) {
-          maxActionValue = actionValue;
-          bestAction = action;
+        try {
+          const nextState = getNextState(grid, row, col, action);
+          const reward = getReward(grid, row, col);
+          
+          // Ensure the next state value exists
+          if (values[nextState.row] === undefined || values[nextState.row][nextState.col] === undefined) {
+            continue;
+          }
+          
+          const nextValue = values[nextState.row][nextState.col];
+          const actionValue = reward + (discountFactor * nextValue);
+          
+          if (actionValue > maxActionValue) {
+            maxActionValue = actionValue;
+            bestAction = action;
+          }
+        } catch (error) {
+          console.warn(`Error calculating policy for [${row},${col}], action ${action}:`, error);
+          continue;
         }
       }
       
@@ -161,29 +191,87 @@ export function getOptimalPath(
   start: Cell, 
   goal: Cell
 ): Cell[] {
+  // Validate inputs
+  if (!policy || policy.length === 0 || !policy[0] || policy[0].length === 0) {
+    console.error("Invalid policy grid provided to getOptimalPath");
+    return []; // Return empty path
+  }
+  
+  const rows = policy.length;
+  const cols = policy[0].length;
+  
+  // Validate start and goal positions
+  if (start.row < 0 || start.row >= rows || start.col < 0 || start.col >= cols ||
+      goal.row < 0 || goal.row >= rows || goal.col < 0 || goal.col >= cols) {
+    console.error("Start or goal position is outside the grid boundaries");
+    return []; // Return empty path
+  }
+  
   const path: Cell[] = [{ row: start.row, col: start.col }];
-  const maxSteps = policy.length * policy[0].length; // Avoid infinite loops
+  const maxSteps = rows * cols * 2; // Allow for a longer path (just in case)
   
   let currentPos = { ...start };
   let steps = 0;
+  let visitedPositions = new Set<string>();
+  
+  // Mark start as visited
+  visitedPositions.add(`${start.row},${start.col}`);
   
   // Follow policy until goal is reached or max steps taken
   while (steps < maxSteps) {
+    // Check if we've reached the goal
     if (currentPos.row === goal.row && currentPos.col === goal.col) {
       break; // Reached goal
     }
     
-    const action = policy[currentPos.row][currentPos.col];
-    const [dr, dc] = DELTAS[action as Action];
+    try {
+      // Get action from policy
+      const action = policy[currentPos.row][currentPos.col];
+      
+      // If no action or invalid action, break the loop
+      if (!action || !DELTAS[action as Action]) {
+        console.warn(`Invalid action "${action}" at position [${currentPos.row},${currentPos.col}]`);
+        break;
+      }
+      
+      const [dr, dc] = DELTAS[action as Action];
+      
+      // Calculate next position
+      const nextPos = {
+        row: currentPos.row + dr,
+        col: currentPos.col + dc
+      };
+      
+      // Validate next position
+      if (nextPos.row < 0 || nextPos.row >= rows || 
+          nextPos.col < 0 || nextPos.col >= cols) {
+        console.warn(`Next position [${nextPos.row},${nextPos.col}] is outside grid boundaries`);
+        break;
+      }
+      
+      // Check for cycles in the path (avoid infinite loops)
+      const posKey = `${nextPos.row},${nextPos.col}`;
+      if (visitedPositions.has(posKey)) {
+        console.warn("Cycle detected in path, breaking to avoid infinite loop");
+        break;
+      }
+      
+      // Update current position and mark as visited
+      currentPos = nextPos;
+      visitedPositions.add(posKey);
+      path.push({ ...currentPos });
+      
+    } catch (error) {
+      console.error("Error following policy path:", error);
+      break;
+    }
     
-    // Move to next state
-    currentPos = {
-      row: currentPos.row + dr,
-      col: currentPos.col + dc
-    };
-    
-    path.push({ ...currentPos });
     steps++;
+  }
+  
+  // If we didn't reach the goal, but ran out of steps
+  if (currentPos.row !== goal.row || currentPos.col !== goal.col) {
+    console.warn(`Could not find path to goal after ${steps} steps`);
   }
   
   return path;
